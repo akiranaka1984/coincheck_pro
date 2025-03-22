@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # バックエンドAPI
+  api:
+    build: ./backend
+    container_name: coincheck-backend
+    ports:
+      - "4000:4000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=coincheck_app
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your_jwt_secret_key_here
+      - ENCRYPTION_KEY=your_encryption_key_here # APIキー暗号化用
+      - CORS_ORIGIN=http://localhost:3000
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # フロントエンド
+  frontend:
+    build: ./frontend
+    container_name: coincheck-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    environment:
+      - REACT_APP_API_URL=http://localhost:4000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ワーカー（定期ジョブ実行）
+  worker:
+    build: ./worker
+    container_name: coincheck-worker
+    depends_on:
+      - db
+      - redis
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=coincheck_app
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENCRYPTION_KEY=your_encryption_key_here # APIキー暗号化用
+    volumes:
+      - ./worker:/app
+      - /app/node_modules
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # PostgreSQLデータベース
+  db:
+    image: postgres:14-alpine
+    container_name: coincheck-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=coincheck_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Redis（ジョブキュー用）
+  redis:
+    image: redis:7-alpine
+    container_name: coincheck-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge
