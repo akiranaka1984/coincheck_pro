@@ -9,6 +9,9 @@ module.exports = {
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
     logging: console.log,
+    dialectOptions: {
+      ssl: false,
+    },
   },
   test: {
     username: process.env.DB_USER || 'postgres',
@@ -18,6 +21,9 @@ module.exports = {
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
     logging: false,
+    dialectOptions: {
+      ssl: false,
+    },
   },
   production: {
     username: process.env.DB_USER,

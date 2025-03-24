@@ -59,4 +59,14 @@ app.use((err, req, res, next) => {
   }
 })();
 
+// ヘルスチェックエンドポイント
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+// API ヘルスチェックエンドポイント（/api/healthにリダイレクト）
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 module.exports = app; // テスト用にエクスポート

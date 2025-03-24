@@ -1,13 +1,11 @@
-FROM node:18-alpine
-
+FROM node:18-alpine as build
 WORKDIR /app
-
-# パッケージ依存関係をコピーしてインストール
 COPY package*.json ./
 RUN npm install
-
-# ソースコードをコピー
 COPY . .
+RUN npm run build
 
-# 開発用サーバーを起動
-CMD ["npm", "start"]
+FROM nginx:alpine
+COPY --from=build /app/build /usr/share/nginx/html
+EXPOSE 3000
+CMD ["nginx", "-g", "daemon off;"]

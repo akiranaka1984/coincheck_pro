@@ -3,7 +3,9 @@ version: '3.8'
 services:
   # バックエンドAPI
   api:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
     container_name: coincheck-backend
     ports:
       - "4000:4000"
@@ -22,7 +24,9 @@ services:
       - REDIS_PORT=6379
       - JWT_SECRET=your_jwt_secret_key_here
       - ENCRYPTION_KEY=your_encryption_key_here # APIキー暗号化用
-      - CORS_ORIGIN=http://localhost:3000
+      - CORS_ORIGIN=http://chk-staging.xyz
+    env_file:
+      - .env
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -35,11 +39,11 @@ services:
     build: ./frontend
     container_name: coincheck-frontend
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - api
     environment:
-      - REACT_APP_API_URL=http://localhost:4000
+      - REACT_APP_API_URL=http://chk-staging.xyz/api
     volumes:
       - ./frontend:/app
       - /app/node_modules

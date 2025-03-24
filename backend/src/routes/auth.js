@@ -1,12 +1,13 @@
 const express = require('express');
 const { body } = require('express-validator');
 const authController = require('../controllers/authController');
-const { authenticate } = require('/app/src/middlewares/auth');
-const validateRequest = require('/app/src/middlewares/validateRequest');
+// 1つだけ残す - 相対パスの方が望ましい
+const { authenticate } = require('../middlewares/auth');
+const validateRequest = require('../middlewares/validateRequest');
 
 const router = express.Router();
-
 // ログイン
+
 router.post(
   '/login',
   [
