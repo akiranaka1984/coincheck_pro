@@ -11,12 +11,27 @@ const errorHandler = require('./middlewares/errorHandler');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// CORS設定を更新して複数のオリジンを許可
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:8080', // 新しいフロントエンドポート
+  process.env.CORS_ORIGIN
+].filter(Boolean); // undefinedの値を除外
+
 // ミドルウェアのセットアップ
 app.use(helmet()); // セキュリティヘッダを追加
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: function(origin, callback) {
+    // オリジンがnull（例：Postmanからのリクエスト）またはallowedOriginsに含まれる場合は許可
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORSポリシーにより、このオリジンからのアクセスは拒否されました'));
+    }
+  },
   credentials: true,
 })); // CORS設定
+
 app.use(morgan('dev')); // リクエストログ
 app.use(express.json()); // JSONパース
 app.use(express.urlencoded({ extended: true })); // URLエンコードされたボディをパース
@@ -53,16 +68,12 @@ app.use((err, req, res, next) => {
     // サーバー起動
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`CORS enabled for origins: ${allowedOrigins.join(', ')}`);
     });
   } catch (error) {
     console.error('Unable to start server:', error);
   }
 })();
-
-// ヘルスチェックエンドポイント
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
 
 // API ヘルスチェックエンドポイント（/api/healthにリダイレクト）
 app.get('/api/health', (req, res) => {

@@ -15,7 +15,7 @@ const getAllApiKeys = async (req, res, next) => {
     // ユーザーに関連するAPIキーを取得
     const apiKeys = await ApiKey.findAll({
       where: { userId },
-      attributes: ['id', 'name', 'accessKey', 'secretKey', 'btcWalletAddress', 'isActive', 'lastCheckedAt', 'createdAt', 'updatedAt'],
+      attributes: ['id', 'name', 'accessKey', 'secretKey', 'btcWalletAddress', 'ethWalletAddress', 'cryptocurrencyType', 'isActive', 'lastCheckedAt', 'createdAt', 'updatedAt'],
       order: [['createdAt', 'DESC']],
     });
     
@@ -25,6 +25,12 @@ const getAllApiKeys = async (req, res, next) => {
       data.accessKey = maskData(decrypt(data.accessKey), 4);
       data.secretKey = maskData(decrypt(data.secretKey), 4);
       data.btcWalletAddress = maskData(decrypt(data.btcWalletAddress), 8);
+      
+      // ETHウォレットアドレスが存在する場合はマスク処理
+      if (data.ethWalletAddress) {
+        data.ethWalletAddress = maskData(decrypt(data.ethWalletAddress), 8);
+      }
+      
       return data;
     });
     
@@ -46,7 +52,7 @@ const getApiKeyById = async (req, res, next) => {
     // APIキーの取得
     const apiKey = await ApiKey.findOne({
       where: { id: apiKeyId, userId },
-      attributes: ['id', 'name', 'accessKey', 'secretKey', 'btcWalletAddress', 'isActive', 'lastCheckedAt', 'createdAt', 'updatedAt'],
+      attributes: ['id', 'name', 'accessKey', 'secretKey', 'btcWalletAddress', 'ethWalletAddress', 'cryptocurrencyType', 'isActive', 'lastCheckedAt', 'createdAt', 'updatedAt'],
     });
     
     if (!apiKey) {
@@ -64,10 +70,16 @@ const getApiKeyById = async (req, res, next) => {
       data.accessKey = decrypt(data.accessKey);
       data.secretKey = decrypt(data.secretKey);
       data.btcWalletAddress = decrypt(data.btcWalletAddress);
+      if (data.ethWalletAddress) {
+        data.ethWalletAddress = decrypt(data.ethWalletAddress);
+      }
     } else {
       data.accessKey = maskData(decrypt(data.accessKey), 4);
       data.secretKey = maskData(decrypt(data.secretKey), 4);
       data.btcWalletAddress = maskData(decrypt(data.btcWalletAddress), 8);
+      if (data.ethWalletAddress) {
+        data.ethWalletAddress = maskData(decrypt(data.ethWalletAddress), 8);
+      }
     }
     
     return res.status(200).json({
@@ -79,16 +91,40 @@ const getApiKeyById = async (req, res, next) => {
   }
 };
 
-// APIキーの新規作成
 const createApiKey = async (req, res, next) => {
+  console.log("受信データ:", JSON.stringify(req.body));
   try {
     const userId = req.user.id;
-    const { name, accessKey, secretKey, btcWalletAddress } = req.body;
+    const { name, accessKey, secretKey, btcWalletAddress, ethWalletAddress, cryptocurrencyType } = req.body;
+    
+    // 必須項目の検証
+    if (!name || !accessKey || !secretKey) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'APIキー名、アクセスキー、シークレットキーは必須です',
+      });
+    }
+    
+    // 暗号資産タイプに応じたウォレットアドレスの検証
+    if (cryptocurrencyType === 'btc' && !btcWalletAddress) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'BTCを選択した場合、BTCウォレットアドレスは必須です',
+      });
+    }
+    
+    if (cryptocurrencyType === 'eth' && !ethWalletAddress) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'ETHを選択した場合、ETHウォレットアドレスは必須です',
+      });
+    }
     
     // APIキーの暗号化
     const encryptedAccessKey = encrypt(accessKey);
     const encryptedSecretKey = encrypt(secretKey);
-    const encryptedBtcWalletAddress = encrypt(btcWalletAddress);
+    const encryptedBtcWalletAddress = encrypt(btcWalletAddress || 'dummy-address');
+    const encryptedEthWalletAddress = ethWalletAddress ? encrypt(ethWalletAddress) : null;
     
     // 新規APIキーの作成
     const newApiKey = await ApiKey.create({
@@ -97,6 +133,8 @@ const createApiKey = async (req, res, next) => {
       accessKey: encryptedAccessKey,
       secretKey: encryptedSecretKey,
       btcWalletAddress: encryptedBtcWalletAddress,
+      ethWalletAddress: encryptedEthWalletAddress,
+      cryptocurrencyType: cryptocurrencyType || 'btc',
       isActive: true,
     });
     
@@ -104,7 +142,10 @@ const createApiKey = async (req, res, next) => {
     const data = newApiKey.toJSON();
     data.accessKey = maskData(accessKey, 4);
     data.secretKey = maskData(secretKey, 4);
-    data.btcWalletAddress = maskData(btcWalletAddress, 8);
+    data.btcWalletAddress = maskData(btcWalletAddress || 'dummy-address', 8);
+    if (ethWalletAddress) {
+      data.ethWalletAddress = maskData(ethWalletAddress, 8);
+    }
     
     return res.status(201).json({
       status: 'success',
@@ -121,7 +162,7 @@ const updateApiKey = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const apiKeyId = req.params.id;
-    const { name, accessKey, secretKey, btcWalletAddress, isActive } = req.body;
+    const { name, accessKey, secretKey, btcWalletAddress, ethWalletAddress, cryptocurrencyType, isActive } = req.body;
     
     // 更新対象のAPIキーを取得
     const apiKey = await ApiKey.findOne({
@@ -142,6 +183,10 @@ const updateApiKey = async (req, res, next) => {
       updateData.isActive = isActive;
     }
     
+    if (cryptocurrencyType) {
+      updateData.cryptocurrencyType = cryptocurrencyType;
+    }
+    
     // 各フィールドを個別に暗号化（変更があった場合のみ）
     if (accessKey) {
       updateData.accessKey = encrypt(accessKey);
@@ -155,6 +200,10 @@ const updateApiKey = async (req, res, next) => {
       updateData.btcWalletAddress = encrypt(btcWalletAddress);
     }
     
+    if (ethWalletAddress) {
+      updateData.ethWalletAddress = encrypt(ethWalletAddress);
+    }
+    
     // APIキーの更新
     await apiKey.update(updateData);
     
@@ -166,6 +215,9 @@ const updateApiKey = async (req, res, next) => {
     data.accessKey = maskData(decrypt(data.accessKey), 4);
     data.secretKey = maskData(decrypt(data.secretKey), 4);
     data.btcWalletAddress = maskData(decrypt(data.btcWalletAddress), 8);
+    if (data.ethWalletAddress) {
+      data.ethWalletAddress = maskData(decrypt(data.ethWalletAddress), 8);
+    }
     
     return res.status(200).json({
       status: 'success',
@@ -280,8 +332,10 @@ const getApiKeyBalance = async (req, res, next) => {
       const balance = {
         jpy: balanceInfo.jpy || 0,
         btc: balanceInfo.btc || 0,
+        eth: balanceInfo.eth || 0,
         jpyReserved: balanceInfo.jpy_reserved || 0,
         btcReserved: balanceInfo.btc_reserved || 0,
+        ethReserved: balanceInfo.eth_reserved || 0,
         lastCheckedAt: new Date(),
       };
       
@@ -350,8 +404,10 @@ const updateApiKeyBalance = async (req, res, next) => {
     const balance = {
       jpy: balanceInfo.jpy || 0,
       btc: balanceInfo.btc || 0,
+      eth: balanceInfo.eth || 0,
       jpyReserved: balanceInfo.jpy_reserved || 0,
       btcReserved: balanceInfo.btc_reserved || 0,
+      ethReserved: balanceInfo.eth_reserved || 0,
       lastCheckedAt: now,
     };
     

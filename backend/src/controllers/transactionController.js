@@ -91,7 +91,7 @@ const getTransactionById = async (req, res, next) => {
 const executeManualTransaction = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { apiKeyId, amount } = req.body;
+    const { apiKeyId, amount, currency = 'BTC' } = req.body; // currencyパラメータを追加
     
     // APIキーの取得
     const apiKey = await ApiKey.findOne({
@@ -108,38 +108,72 @@ const executeManualTransaction = async (req, res, next) => {
     // APIキーの復号化
     const accessKey = decrypt(apiKey.accessKey);
     const secretKey = decrypt(apiKey.secretKey);
-    const walletAddress = decrypt(apiKey.btcWalletAddress);
+    
+    // 通貨に応じたウォレットアドレスの取得
+    let walletAddress;
+    if (currency === 'ETH' && apiKey.ethWalletAddress) {
+      walletAddress = decrypt(apiKey.ethWalletAddress);
+    } else {
+      walletAddress = decrypt(apiKey.btcWalletAddress);
+    }
     
     // 取引履歴の作成（初期状態）
     const transaction = await Transaction.create({
       userId,
       apiKeyId,
-      type: 'purchase',
+      type: currency === 'ETH' ? 'eth_purchase' : 'purchase',
       status: 'pending',
     });
     
     try {
-      // 成行注文を作成
-      const purchaseResult = await coincheckApi.createMarketBuyOrder(
-        accessKey,
-        secretKey,
-        amount
-      );
+      let purchaseResult;
       
-      // 購入成功を記録
-      await transaction.update({
-        purchaseId: purchaseResult.id.toString(),
-        purchaseAmount: purchaseResult.amount,
-        purchaseRate: purchaseResult.rate,
-        status: 'completed',
-        rawData: purchaseResult,
-      });
-      
-      return res.status(200).json({
-        status: 'success',
-        message: 'BTCの購入が完了しました',
-        data: { transaction },
-      });
+      // 通貨タイプに応じた処理
+      if (currency === 'ETH') {
+        // ETHの成行注文を作成
+        purchaseResult = await coincheckApi.createMarketBuyOrderETH(
+          accessKey,
+          secretKey,
+          amount
+        );
+        
+        // ETH購入成功を記録
+        await transaction.update({
+          purchaseId: purchaseResult.id.toString(),
+          purchaseAmount: purchaseResult.amount, // または ethPurchaseAmount を使用
+          purchaseRate: purchaseResult.rate,
+          status: 'completed',
+          rawData: purchaseResult,
+        });
+        
+        return res.status(200).json({
+          status: 'success',
+          message: 'ETHの購入が完了しました',
+          data: { transaction },
+        });
+      } else {
+        // BTCの成行注文を作成（既存のコード）
+        purchaseResult = await coincheckApi.createMarketBuyOrder(
+          accessKey,
+          secretKey,
+          amount
+        );
+        
+        // BTC購入成功を記録
+        await transaction.update({
+          purchaseId: purchaseResult.id.toString(),
+          purchaseAmount: purchaseResult.amount,
+          purchaseRate: purchaseResult.rate,
+          status: 'completed',
+          rawData: purchaseResult,
+        });
+        
+        return res.status(200).json({
+          status: 'success',
+          message: 'BTCの購入が完了しました',
+          data: { transaction },
+        });
+      }
     } catch (error) {
       // エラーを記録
       await transaction.update({

@@ -16,6 +16,11 @@ import {
   Alert,
   Breadcrumbs,
   Link,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormHelperText,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -38,6 +43,8 @@ const ApiKeyDetailPage = () => {
     accessKey: '',
     secretKey: '',
     btcWalletAddress: '',
+    ethWalletAddress: '',
+    cryptocurrencyType: 'btc', // デフォルトはBTC
     isActive: true,
   });
   const [loading, setLoading] = useState(false);
@@ -57,7 +64,10 @@ const ApiKeyDetailPage = () => {
         setError(null);
         
         const data = await apiKeyService.getApiKeyById(id, true);
-        setApiKey(data);
+        setApiKey({
+          ...data,
+          cryptocurrencyType: data.cryptocurrencyType || 'btc' // デフォルト値の設定
+        });
       } catch (error) {
         console.error('APIキーの取得に失敗:', error);
         setError(error.message);
@@ -82,32 +92,53 @@ const ApiKeyDetailPage = () => {
   };
   
   // フォーム送信ハンドラ
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  try {
+    setSaving(true);
+    setError(null);
     
-    try {
-      setSaving(true);
-      setError(null);
-      
-      if (isEditMode) {
-        // 既存APIキーの更新
-        await apiKeyService.updateApiKey(id, apiKey);
-        toast.success('APIキーを更新しました');
-      } else {
-        // 新規APIキーの作成
-        await apiKeyService.createApiKey(apiKey);
-        toast.success('APIキーを登録しました');
-      }
-      
-      // APIキー一覧に戻る
-      navigate('/api-keys');
-    } catch (error) {
-      console.error('APIキーの保存に失敗:', error);
-      setError(error.message);
-    } finally {
+    // 選択された暗号資産タイプのウォレットアドレスバリデーション
+    if (apiKey.cryptocurrencyType === 'btc' && !apiKey.btcWalletAddress) {
+      setError('BTCを選択した場合、BTCウォレットアドレスは必須です');
       setSaving(false);
+      return;
     }
-  };
+    
+    if (apiKey.cryptocurrencyType === 'eth' && !apiKey.ethWalletAddress) {
+      setError('ETHを選択した場合、ETHウォレットアドレスは必須です');
+      setSaving(false);
+      return;
+    }
+    
+    // 送信データを準備（オリジナルのデータをコピー）
+    const dataToSend = { ...apiKey };
+    
+    // ETH選択時、BTCアドレスにダミー値をセット
+    if (apiKey.cryptocurrencyType === 'eth') {
+      dataToSend.btcWalletAddress = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'; // ダミー値
+    }
+    
+    if (isEditMode) {
+      // 既存APIキーの更新
+      await apiKeyService.updateApiKey(id, dataToSend);
+      toast.success('APIキーを更新しました');
+    } else {
+      // 新規APIキーの作成
+      await apiKeyService.createApiKey(dataToSend);
+      toast.success('APIキーを登録しました');
+    }
+    
+    // APIキー一覧に戻る
+    navigate('/api-keys');
+  } catch (error) {
+    console.error('APIキーの保存に失敗:', error);
+    setError(error.message);
+  } finally {
+    setSaving(false);
+  }
+};
   
   // ローディング表示
   if (loading && isEditMode) {
@@ -225,17 +256,57 @@ const ApiKeyDetailPage = () => {
                 />
               </Grid>
               
+              {/* 暗号資産タイプ選択 */}
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel id="cryptocurrencyType-label">暗号資産タイプ</InputLabel>
+                  <Select
+                    labelId="cryptocurrencyType-label"
+                    id="cryptocurrencyType"
+                    name="cryptocurrencyType"
+                    value={apiKey.cryptocurrencyType}
+                    onChange={handleChange}
+                    label="暗号資産タイプ"
+                    disabled={saving}
+                  >
+                    <MenuItem value="btc">Bitcoin (BTC)</MenuItem>
+                    <MenuItem value="eth">Ethereum (ETH)</MenuItem>
+                  </Select>
+                  <FormHelperText>
+                    入金された日本円で購入する暗号資産の種類を選択してください
+                  </FormHelperText>
+                </FormControl>
+              </Grid>
+              
+              {/* BTC ウォレットアドレス */}
               <Grid item xs={12}>
                 <TextField
-                  required
+                  required={apiKey.cryptocurrencyType === 'btc'}
                   fullWidth
                   id="btcWalletAddress"
                   name="btcWalletAddress"
                   label="送金先BTCウォレットアドレス"
                   value={apiKey.btcWalletAddress}
                   onChange={handleChange}
-                  disabled={saving}
-                  helperText="購入したBTCの送金先ウォレットアドレスを入力してください"
+                  disabled={saving} // ETH選択時も入力できるように修正
+                  helperText="BTCを選択した場合、送金先BTCウォレットアドレスを入力してください"
+                  error={apiKey.cryptocurrencyType === 'btc' && !apiKey.btcWalletAddress}
+                />
+              </Grid>
+              
+              {/* ETH ウォレットアドレス */}
+              <Grid item xs={12}>
+                <TextField
+                  required={apiKey.cryptocurrencyType === 'eth'}
+                  fullWidth
+                  id="ethWalletAddress"
+                  name="ethWalletAddress"
+                  label="送金先ETHウォレットアドレス"
+                  value={apiKey.ethWalletAddress || ''}
+                  onChange={handleChange}
+                  disabled={saving || apiKey.cryptocurrencyType !== 'eth'}
+                  helperText="ETHを選択した場合、送金先ETHウォレットアドレスを入力してください"
+                  error={apiKey.cryptocurrencyType === 'eth' && !apiKey.ethWalletAddress}
                 />
               </Grid>
               
