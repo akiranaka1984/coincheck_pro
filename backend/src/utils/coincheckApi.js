@@ -56,6 +56,15 @@ const sendAuthenticatedRequest = async (apiKey, apiSecret, path, method = 'GET',
     if (error.response) {
       const { status, data } = error.response;
       
+      // デバッグログを追加
+      console.log('Coincheck API Error Response:', {
+        status: status,
+        data: data,
+        url: error.config.url,
+        method: error.config.method,
+        requestData: error.config.data
+      });
+      
       // レート制限エラーの場合
       if (status === 429) {
         const err = new Error('Coincheck API rate limit exceeded');
@@ -120,10 +129,34 @@ const getExchangeStatus = async () => {
   }
 };
 
+// ETH 購入用関数を追加
+const createMarketBuyOrderETH = async (apiKey, apiSecret, amount) => {
+  const data = {
+    pair: 'eth_jpy',  // ETH/JPY ペア
+    order_type: 'market_buy',
+    market_buy_amount: amount.toString(),
+  };
+  
+  return sendAuthenticatedRequest(apiKey, apiSecret, '/api/exchange/orders', 'POST', data);
+};
+
+// ETH 送金用関数を追加
+const sendEthereum = async (apiKey, apiSecret, address, amount) => {
+  const data = {
+    address,
+    amount: amount.toString(),
+  };
+  
+  return sendAuthenticatedRequest(apiKey, apiSecret, '/api/send_ethereum', 'POST', data);
+};
+
+
 module.exports = {
   getBalance,
   getDeposits,
   createMarketBuyOrder,
   sendBitcoin,
   getExchangeStatus,
+  createMarketBuyOrderETH,
+  sendEthereum,
 };

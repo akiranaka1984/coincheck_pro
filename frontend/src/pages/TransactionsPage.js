@@ -45,6 +45,7 @@ const getTypeColor = (type) => {
     case 'deposit':
       return 'primary';
     case 'purchase':
+    case 'eth_purchase':
       return 'info';
     case 'transfer':
       return 'success';
@@ -75,9 +76,13 @@ const getTypeName = (type) => {
     case 'deposit':
       return '入金';
     case 'purchase':
-      return '購入';
+      return 'BTC購入';
+    case 'eth_purchase':
+      return 'ETH購入';
     case 'transfer':
-      return '送金';
+      return 'BTC送金';
+    case 'eth_transfer':
+      return 'ETH送金';
     case 'error':
       return 'エラー';
     default:
@@ -106,6 +111,7 @@ const TransactionsPage = () => {
   const [transactionForm, setTransactionForm] = useState({
     apiKeyId: '',
     amount: '',
+    currency: 'BTC',
   });
   
   // 取引履歴の読み込み
@@ -159,6 +165,7 @@ const TransactionsPage = () => {
       setTransactionForm({
         apiKeyId: apiKeyList.length > 0 ? apiKeyList[0].id : '',
         amount: '',
+        currency: 'BTC',
       });
       
       setExecuteDialogOpen(true);
@@ -280,8 +287,12 @@ const TransactionsPage = () => {
                       `${transaction.depositAmount} BTC` : null}
                     {transaction.type === 'purchase' && transaction.purchaseAmount ? 
                       `${transaction.purchaseAmount} BTC` : null}
+                    {transaction.type === 'eth_purchase' && transaction.purchaseAmount ? 
+                      `${transaction.purchaseAmount} ETH` : null}
                     {transaction.type === 'transfer' && transaction.transferAmount ? 
                       `${transaction.transferAmount} BTC` : null}
+                    {transaction.type === 'eth_transfer' && transaction.transferAmount ? 
+                      `${transaction.transferAmount} ETH` : null}
                     {transaction.type === 'error' ? '-' : null}
                   </TableCell>
                   <TableCell>
@@ -340,7 +351,7 @@ const TransactionsPage = () => {
         <DialogTitle>手動取引の実行</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 3 }}>
-            選択したAPIキーを使用して、指定した金額の日本円でBTCを購入し、<br />
+            選択したAPIキーを使用して、指定した金額の日本円で暗号資産を購入し、<br />
             API設定で登録されたウォレットに送金します。
           </DialogContentText>
           
@@ -367,6 +378,23 @@ const TransactionsPage = () => {
             </Select>
           </FormControl>
           
+          {/* 通貨選択フォームの追加 */}
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel id="currency-select-label">通貨</InputLabel>
+            <Select
+              labelId="currency-select-label"
+              id="currency"
+              name="currency"
+              value={transactionForm.currency}
+              onChange={handleFormChange}
+              label="通貨"
+              disabled={executingTransaction}
+            >
+              <MenuItem value="BTC">ビットコイン (BTC)</MenuItem>
+              <MenuItem value="ETH">イーサリアム (ETH)</MenuItem>
+            </Select>
+          </FormControl>
+          
           <TextField
             fullWidth
             id="amount"
@@ -379,7 +407,7 @@ const TransactionsPage = () => {
             InputProps={{
               endAdornment: <Typography variant="body2">JPY</Typography>,
             }}
-            helperText="購入するBTCの金額を日本円で入力してください"
+            helperText={`購入する${transactionForm.currency}の金額を日本円で入力してください`}
           />
         </DialogContent>
         <DialogActions>

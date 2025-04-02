@@ -1,0 +1,9 @@
+const path = require('path');
+
+module.exports = {
+  // config.json ではなく、database.js を設定ファイルとして使う場合
+  'config': path.resolve('src', 'config', 'database.js'),
+  'models-path': path.resolve('src', 'models'),
+  'migrations-path': path.resolve('migrations'),
+  'seeders-path': path.resolve('seeders')
+};

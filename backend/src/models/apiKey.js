@@ -31,10 +31,26 @@ module.exports = (sequelize, DataTypes) => {
     },
     btcWalletAddress: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true, // falseからtrueに変更
       validate: {
-        notEmpty: true,
+        validateWalletAddress(value) {
+          // 暗号資産タイプがBTCの場合のみバリデーション
+          if (this.cryptocurrencyType === 'btc' && (!value || value.trim() === '')) {
+            throw new Error('BTCウォレットアドレスは必須です');
+          }
+        }
       },
+    },
+    // 新規フィールド
+    ethWalletAddress: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    // 暗号資産タイプを指定するフィールド
+    cryptocurrencyType: {
+      type: DataTypes.ENUM('btc', 'eth'),
+      defaultValue: 'btc',
+      allowNull: false,
     },
     isActive: {
       type: DataTypes.BOOLEAN,

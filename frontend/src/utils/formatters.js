@@ -41,6 +41,24 @@ export const formatBitcoin = (amount, showSymbol = true) => {
 };
 
 /**
+ * 数値をイーサリアム形式にフォーマット
+ * @param {number|string} amount - フォーマットする金額
+ * @param {boolean} showSymbol - 通貨記号を表示するかどうか
+ * @returns {string} - フォーマットされた金額
+ */
+export const formatEthereum = (amount, showSymbol = true) => {
+  const numAmount = parseFloat(amount) || 0;
+  
+  // ETHは6桁までの精度で表示
+  const formatted = numAmount.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 6,
+  });
+  
+  return showSymbol ? `${formatted} ETH` : formatted;
+};
+
+/**
  * パーセンテージのフォーマット
  * @param {number|string} percent - フォーマットするパーセンテージ
  * @param {number} precision - 小数点以下の桁数

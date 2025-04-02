@@ -24,7 +24,7 @@ services:
       - REDIS_PORT=6379
       - JWT_SECRET=your_jwt_secret_key_here
       - ENCRYPTION_KEY=your_encryption_key_here # APIキー暗号化用
-      - CORS_ORIGIN=http://178.128.29.62:3000
+      - CORS_ORIGIN=http://localhost:3000
     env_file:
       - .env
     volumes:
@@ -39,11 +39,11 @@ services:
     build: ./frontend
     container_name: coincheck-frontend
     ports:
-      - "3000:80"
+      - "8080:3000"
     depends_on:
       - api
     environment:
-      - REACT_APP_API_URL=http://178.128.29.62:4000
+      - HOST=0.0.0.0
     volumes:
       - ./frontend:/app
       - /app/node_modules

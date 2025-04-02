@@ -1,11 +1,19 @@
-FROM node:18-alpine as build
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
+FROM node:18-alpine
 
-FROM nginx:alpine
-COPY --from=build /app/build /usr/share/nginx/html
-EXPOSE 3000
-CMD ["nginx", "-g", "daemon off;"]
+WORKDIR /app
+
+# パッケージ依存関係をコピーしてインストール
+COPY package*.json ./
+
+# bcryptの再ビルドに必要なパッケージを追加
+RUN apk add --no-cache make gcc g++ python3 && \
+    npm install && \
+    npm rebuild bcrypt --build-from-source && \
+    apk del make gcc g++ python3
+
+# ソースコードをコピー
+COPY . .
+
+# 本番モードで実行
+ENV NODE_ENV=production
+CMD ["npm", "start"]
