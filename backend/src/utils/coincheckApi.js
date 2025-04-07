@@ -140,16 +140,18 @@ const createMarketBuyOrderETH = async (apiKey, apiSecret, amount) => {
   return sendAuthenticatedRequest(apiKey, apiSecret, '/api/exchange/orders', 'POST', data);
 };
 
-// ETH 送金用関数を追加
+// ETH送金
 const sendEthereum = async (apiKey, apiSecret, address, amount) => {
   const data = {
     address,
     amount: amount.toString(),
   };
   
-  return sendAuthenticatedRequest(apiKey, apiSecret, '/api/send_ethereum', 'POST', data);
+  return sendAuthenticatedRequest(apiKey, apiSecret, '/api/send_money', 'POST', {
+    ...data,
+    currency: 'eth'
+  });
 };
-
 
 module.exports = {
   getBalance,

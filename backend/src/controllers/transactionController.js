@@ -91,7 +91,17 @@ const getTransactionById = async (req, res, next) => {
 const executeManualTransaction = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { apiKeyId, amount, currency = 'BTC' } = req.body; // currencyパラメータを追加
+    const { apiKeyId, amount, currency = 'BTC' } = req.body;
+
+    if (!amount || 
+        isNaN(parseFloat(amount)) || 
+        parseFloat(amount) <= 0 || 
+        amount === 'Infinity') {
+      return res.status(400).json({
+        status: 'error',
+        message: '有効な金額を指定してください'
+      });
+    }
     
     // APIキーの取得
     const apiKey = await ApiKey.findOne({
@@ -117,6 +127,13 @@ const executeManualTransaction = async (req, res, next) => {
       walletAddress = decrypt(apiKey.btcWalletAddress);
     }
     
+    if (!walletAddress) {
+      return res.status(400).json({
+        status: 'error',
+        message: `送金先${currency}ウォレットアドレスが設定されていません`,
+      });
+    }
+    
     // 取引履歴の作成（初期状態）
     const transaction = await Transaction.create({
       userId,
@@ -140,19 +157,36 @@ const executeManualTransaction = async (req, res, next) => {
         // ETH購入成功を記録
         await transaction.update({
           purchaseId: purchaseResult.id.toString(),
-          purchaseAmount: purchaseResult.amount, // または ethPurchaseAmount を使用
+          purchaseAmount: purchaseResult.amount,
           purchaseRate: purchaseResult.rate,
-          status: 'completed',
+          status: 'pending', // 処理中に変更
           rawData: purchaseResult,
+        });
+        
+        // ETH送金処理を実行
+        const transferResult = await coincheckApi.sendEthereum(
+          accessKey,
+          secretKey,
+          walletAddress,
+          purchaseResult.amount || purchaseResult.market_buy_amount / purchaseResult.rate
+        );
+        
+        // 送金処理の結果を記録
+        await transaction.update({
+          transferId: transferResult.id.toString(),
+          transferAmount: transferResult.amount,
+          walletAddress: walletAddress,
+          status: 'completed',
+          rawData: { ...purchaseResult, transfer: transferResult },
         });
         
         return res.status(200).json({
           status: 'success',
-          message: 'ETHの購入が完了しました',
+          message: 'ETHの購入と送金が完了しました',
           data: { transaction },
         });
       } else {
-        // BTCの成行注文を作成（既存のコード）
+        // BTCの成行注文を作成
         purchaseResult = await coincheckApi.createMarketBuyOrder(
           accessKey,
           secretKey,
@@ -164,16 +198,137 @@ const executeManualTransaction = async (req, res, next) => {
           purchaseId: purchaseResult.id.toString(),
           purchaseAmount: purchaseResult.amount,
           purchaseRate: purchaseResult.rate,
-          status: 'completed',
+          status: 'pending', // 処理中に変更
           rawData: purchaseResult,
+        });
+        
+        // BTC送金処理を実行
+        const transferResult = await coincheckApi.sendBitcoin(
+          accessKey,
+          secretKey,
+          walletAddress,
+          purchaseResult.amount
+        );
+        
+        // 送金処理の結果を記録
+        await transaction.update({
+          transferId: transferResult.id.toString(),
+          transferAmount: transferResult.amount,
+          walletAddress: walletAddress,
+          status: 'completed',
+          rawData: { ...purchaseResult, transfer: transferResult },
         });
         
         return res.status(200).json({
           status: 'success',
-          message: 'BTCの購入が完了しました',
+          message: 'BTCの購入と送金が完了しました',
           data: { transaction },
         });
       }
+    } catch (error) {
+      // エラーを記録
+      await transaction.update({
+        status: 'failed',
+        errorMessage: error.message,
+        rawData: error.details || error.message,
+      });
+      
+      throw error;
+    }
+  } catch (error) {
+    // API接続エラーの場合は専用メッセージを返す
+    if (error.name === 'TooManyRequestsError') {
+      return res.status(429).json({
+        status: 'error',
+        message: 'APIリクエスト制限を超えました。しばらく待ってから再試行してください',
+      });
+    }
+    
+    next(error);
+  }
+};
+
+// 手動送金の実行
+const executeManualTransfer = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { apiKeyId, amount, currency = 'BTC', walletAddress } = req.body;
+    
+    if (!amount || 
+        isNaN(parseFloat(amount)) || 
+        parseFloat(amount) <= 0 || 
+        amount === 'Infinity') {
+      return res.status(400).json({
+        status: 'error',
+        message: '有効な金額を指定してください'
+      });
+    }
+    
+    if (!walletAddress) {
+      return res.status(400).json({
+        status: 'error',
+        message: '送金先ウォレットアドレスを指定してください'
+      });
+    }
+    
+    // APIキーの取得
+    const apiKey = await ApiKey.findOne({
+      where: { id: apiKeyId, userId, isActive: true },
+    });
+    
+    if (!apiKey) {
+      return res.status(404).json({
+        status: 'error',
+        message: '有効なAPIキーが見つかりません',
+      });
+    }
+    
+    // APIキーの復号化
+    const accessKey = decrypt(apiKey.accessKey);
+    const secretKey = decrypt(apiKey.secretKey);
+    
+    // 取引履歴の作成（初期状態）
+    const transaction = await Transaction.create({
+      userId,
+      apiKeyId,
+      type: currency.toLowerCase() === 'eth' ? 'eth_transfer' : 'transfer',
+      status: 'pending',
+      walletAddress,
+    });
+    
+    try {
+      // 暗号資産の送金処理
+      let transferResult;
+      
+      if (currency.toLowerCase() === 'eth') {
+        transferResult = await coincheckApi.sendEthereum(
+          accessKey,
+          secretKey,
+          walletAddress,
+          amount
+        );
+      } else {
+        transferResult = await coincheckApi.sendBitcoin(
+          accessKey,
+          secretKey,
+          walletAddress,
+          amount
+        );
+      }
+      
+      // 送金成功を記録
+      await transaction.update({
+        transferId: transferResult.id.toString(),
+        transferAmount: transferResult.amount,
+        status: 'completed',
+        rawData: transferResult,
+      });
+      
+      return res.status(200).json({
+        status: 'success',
+        message: `${currency.toUpperCase()}の送金が完了しました`,
+        data: { transaction },
+      });
     } catch (error) {
       // エラーを記録
       await transaction.update({
@@ -201,4 +356,5 @@ module.exports = {
   getAllTransactions,
   getTransactionById,
   executeManualTransaction,
+  executeManualTransfer,
 };

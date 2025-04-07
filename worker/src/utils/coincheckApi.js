@@ -86,10 +86,21 @@ const getDeposits = async (apiKey, apiSecret, currency = 'BTC') => {
   return sendAuthenticatedRequest(apiKey, apiSecret, `/api/deposit_money?currency=${currency}`);
 };
 
-// 新規注文（成行買い）
+// 新規注文（成行買い - BTC）
 const createMarketBuyOrder = async (apiKey, apiSecret, amount) => {
   const data = {
     pair: 'btc_jpy',
+    order_type: 'market_buy',
+    market_buy_amount: amount.toString(),
+  };
+  
+  return sendAuthenticatedRequest(apiKey, apiSecret, '/api/exchange/orders', 'POST', data);
+};
+
+// 新規注文（成行買い - ETH）
+const createMarketBuyOrderETH = async (apiKey, apiSecret, amount) => {
+  const data = {
+    pair: 'eth_jpy',
     order_type: 'market_buy',
     market_buy_amount: amount.toString(),
   };
@@ -102,6 +113,17 @@ const sendBitcoin = async (apiKey, apiSecret, address, amount) => {
   const data = {
     address,
     amount: amount.toString(),
+  };
+  
+  return sendAuthenticatedRequest(apiKey, apiSecret, '/api/send_money', 'POST', data);
+};
+
+// ETH送金
+const sendEthereum = async (apiKey, apiSecret, address, amount) => {
+  const data = {
+    address,
+    amount: amount.toString(),
+    currency: 'ETH'
   };
   
   return sendAuthenticatedRequest(apiKey, apiSecret, '/api/send_money', 'POST', data);
@@ -124,6 +146,8 @@ module.exports = {
   getBalance,
   getDeposits,
   createMarketBuyOrder,
+  createMarketBuyOrderETH,
   sendBitcoin,
+  sendEthereum,
   getExchangeStatus,
 };

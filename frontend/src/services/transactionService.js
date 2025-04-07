@@ -1,13 +1,13 @@
 import api from './api';
 
 /**
- * トランザクション関連のAPI呼び出しを行うサービス
+ * 取引関連のAPI呼び出しを行うサービス
  */
 class TransactionService {
   /**
-   * トランザクション一覧を取得
+   * 取引履歴一覧を取得
    * @param {Object} params クエリパラメータ
-   * @returns {Promise<Object>} トランザクションデータとページネーション情報
+   * @returns {Promise<Object>} 取引データとページネーション情報
    */
   async getAllTransactions(params = {}) {
     try {
@@ -34,9 +34,9 @@ class TransactionService {
   }
 
   /**
-   * トランザクションの詳細を取得
-   * @param {number} id トランザクションID
-   * @returns {Promise<Object>} トランザクション情報
+   * 取引の詳細を取得
+   * @param {number} id 取引ID
+   * @returns {Promise<Object>} 取引情報
    */
   async getTransactionById(id) {
     try {
@@ -68,6 +68,25 @@ class TransactionService {
       throw new Error(response.data.message || '取引の実行に失敗しました');
     } catch (error) {
       this._handleError(error, '取引の実行に失敗しました');
+    }
+  }
+
+  /**
+   * 手動送金を実行
+   * @param {Object} data 送金データ
+   * @returns {Promise<Object>} 実行結果
+   */
+  async executeTransfer(data) {
+    try {
+      const response = await api.post('/api/transactions/execute-transfer', data);
+      
+      if (response.data.status === 'success') {
+        return response.data.data.transaction;
+      }
+      
+      throw new Error(response.data.message || '送金の実行に失敗しました');
+    } catch (error) {
+      this._handleError(error, '送金の実行に失敗しました');
     }
   }
 

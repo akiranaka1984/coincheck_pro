@@ -32,6 +32,7 @@ import {
   Refresh as RefreshIcon,
   PlayArrow as ExecuteIcon,
   Visibility as VisibilityIcon,
+  Send as SendIcon,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 
@@ -48,6 +49,7 @@ const getTypeColor = (type) => {
     case 'eth_purchase':
       return 'info';
     case 'transfer':
+    case 'eth_transfer':
       return 'success';
     case 'error':
       return 'error';
@@ -114,6 +116,16 @@ const TransactionsPage = () => {
     currency: 'BTC',
   });
   
+  // 送金ダイアログの状態
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [executingTransfer, setExecutingTransfer] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    apiKeyId: '',
+    amount: '',
+    cryptoType: 'BTC',
+    walletAddress: '',
+  });
+  
   // 取引履歴の読み込み
   const loadTransactions = async (page = 0, limit = 10) => {
     try {
@@ -175,10 +187,37 @@ const TransactionsPage = () => {
     }
   };
   
+  // 送金ダイアログを開く
+  const handleOpenTransferDialog = async () => {
+    try {
+      // APIキー一覧を取得
+      const apiKeyList = await apiKeyService.getAllApiKeys();
+      setApiKeys(apiKeyList.filter(key => key.isActive));
+      
+      // フォームをリセット
+      setTransferForm({
+        apiKeyId: apiKeyList.length > 0 ? apiKeyList[0].id : '',
+        amount: '',
+        cryptoType: 'BTC'
+      });
+      
+      setTransferDialogOpen(true);
+    } catch (error) {
+      console.error('APIキーの取得に失敗:', error);
+      toast.error('APIキーの取得に失敗しました');
+    }
+  };
+  
   // フォーム入力の変更ハンドラ
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setTransactionForm((prev) => ({ ...prev, [name]: value }));
+  };
+  
+  // 送金フォーム入力の変更ハンドラ
+  const handleTransferFormChange = (e) => {
+    const { name, value } = e.target;
+    setTransferForm((prev) => ({ ...prev, [name]: value }));
   };
   
   // 手動取引を実行
@@ -186,9 +225,15 @@ const TransactionsPage = () => {
     try {
       setExecutingTransaction(true);
       
-      // バリデーション
-      if (!transactionForm.apiKeyId || !transactionForm.amount) {
-        toast.error('APIキーと金額を入力してください');
+      // バリデーション強化
+      if (!transactionForm.apiKeyId) {
+        toast.error('APIキーを選択してください');
+        return;
+      }
+
+      const amount = parseFloat(transactionForm.amount);
+      if (isNaN(amount) || amount <= 0) {
+        toast.error('有効な金額を入力してください');
         return;
       }
       
@@ -207,6 +252,41 @@ const TransactionsPage = () => {
       toast.error(error.message || '取引の実行に失敗しました');
     } finally {
       setExecutingTransaction(false);
+    }
+  };
+  
+  // 手動送金を実行
+  const handleExecuteTransfer = async () => {
+    try {
+      setExecutingTransfer(true);
+      
+      // バリデーション
+      if (!transferForm.apiKeyId || !transferForm.amount || !transferForm.cryptoType) {
+        toast.error('すべての項目を入力してください');
+        return;
+      }
+      
+      const amount = parseFloat(transferForm.amount);
+      if (isNaN(amount) || amount <= 0) {
+        toast.error('有効な送金額を入力してください');
+        return;
+      }
+      
+      // 送金実行
+      const result = await transactionService.executeTransfer(transferForm);
+      
+      toast.success('送金を実行しました');
+      
+      // ダイアログを閉じる
+      setTransferDialogOpen(false);
+      
+      // 取引詳細ページに遷移
+      navigate(`/transactions/${result.id}`);
+    } catch (error) {
+      console.error('送金実行に失敗:', error);
+      toast.error(error.message || '送金の実行に失敗しました');
+    } finally {
+      setExecutingTransfer(false);
     }
   };
   
@@ -241,6 +321,14 @@ const TransactionsPage = () => {
             sx={{ mr: 1 }}
           >
             手動取引実行
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<SendIcon />}
+            onClick={handleOpenTransferDialog}
+            sx={{ mr: 1 }}
+          >
+            手動送金実行
           </Button>
           <IconButton
             onClick={() => loadTransactions(pagination.page, pagination.limit)}
@@ -424,6 +512,90 @@ const TransactionsPage = () => {
             disabled={executingTransaction || !transactionForm.apiKeyId || !transactionForm.amount}
           >
             {executingTransaction ? <CircularProgress size={24} /> : '実行'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* 送金ダイアログ */}
+      <Dialog
+        open={transferDialogOpen}
+        onClose={() => !executingTransfer && setTransferDialogOpen(false)}
+      >
+        <DialogTitle>手動送金の実行</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 3 }}>
+            選択したAPIキーを使用して、指定した量の暗号資産を<br />
+            登録されたウォレットに送金します。
+          </DialogContentText>
+          
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel id="api-key-transfer-label">APIキー</InputLabel>
+            <Select
+              labelId="api-key-transfer-label"
+              id="apiKeyId"
+              name="apiKeyId"
+              value={transferForm.apiKeyId}
+              onChange={handleTransferFormChange}
+              label="APIキー"
+              disabled={executingTransfer || apiKeys.length === 0}
+            >
+              {apiKeys.length > 0 ? (
+                apiKeys.map((apiKey) => (
+                  <MenuItem key={apiKey.id} value={apiKey.id}>
+                    {apiKey.name}
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem disabled>有効なAPIキーがありません</MenuItem>
+              )}
+            </Select>
+          </FormControl>
+          
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel id="crypto-select-label">暗号資産</InputLabel>
+            <Select
+              labelId="crypto-select-label"
+              id="cryptoType"
+              name="cryptoType"
+              value={transferForm.cryptoType}
+              onChange={handleTransferFormChange}
+              label="暗号資産"
+              disabled={executingTransfer}
+            >
+              <MenuItem value="BTC">ビットコイン (BTC)</MenuItem>
+              <MenuItem value="ETH">イーサリアム (ETH)</MenuItem>
+            </Select>
+          </FormControl>
+          
+          <TextField
+            fullWidth
+            id="amount"
+            name="amount"
+            label="送金額"
+            type="number"
+            value={transferForm.amount}
+            onChange={handleTransferFormChange}
+            disabled={executingTransfer}
+            InputProps={{
+              endAdornment: <Typography variant="body2">{transferForm.cryptoType}</Typography>,
+            }}
+            helperText="送金する暗号資産の量を入力してください"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setTransferDialogOpen(false)}
+            disabled={executingTransfer}
+          >
+            キャンセル
+          </Button>
+          <Button
+            onClick={handleExecuteTransfer}
+            color="primary"
+            variant="contained"
+            disabled={executingTransfer || !transferForm.apiKeyId || !transferForm.amount || !transferForm.cryptoType}
+          >
+            {executingTransfer ? <CircularProgress size={24} /> : '送金実行'}
           </Button>
         </DialogActions>
       </Dialog>
